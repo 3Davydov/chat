@@ -1,6 +1,6 @@
-мая 24, 2023 6:57:31 PM com.daniel.server.ServerMain <init>
+мая 30, 2023 1:56:35 AM com.daniel.server.ServerMain <init>
 INFO: Server have been started
-мая 24, 2023 6:57:56 PM com.daniel.server.ServerMain registrateUser
+мая 30, 2023 1:56:48 AM com.daniel.server.ServerMain registrateUser
 INFO: New user whith name dan and ID 0 had connected to server
-мая 24, 2023 6:58:28 PM com.daniel.server.ServerMain deleteUser
+мая 30, 2023 1:57:05 AM com.daniel.server.ServerMain deleteUser
 INFO: New user whith name dan and ID 0 had disconnected from server

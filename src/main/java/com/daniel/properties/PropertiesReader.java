@@ -39,4 +39,12 @@ public class PropertiesReader {
     public String getProtocol() {
         return String.valueOf(prop.getProperty("protocol"));
     }
+
+    public Integer getTimeout() {
+        return Integer.valueOf(prop.getProperty("timeout"));
+    }
+
+    public Integer getKeepAlive() {
+        return Integer.valueOf(prop.getProperty("keepAlive"));
+    }
 }

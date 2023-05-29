@@ -44,7 +44,7 @@ public class Client {
                 socet.sendMessage(userInfo);
             }
         }
-        catch (SocetStillOpenedException e) {
+        catch (SocetStillOpenedException e) {   
             throw new ConnectionError("Client has active connection");
         } catch (IOException e) {
             throw new ConnectionError("Unknown host or port");

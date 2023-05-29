@@ -5,6 +5,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -13,10 +14,13 @@ import com.daniel.XMLConverter.ConverterFactory;
 import com.daniel.XMLConverter.ClientToXML.ClientMessageConvFactory;
 import com.daniel.XMLConverter.ServerToXML.ServerMessageConvFactory;
 import com.daniel.ctsmessages.CTSMessage;
+import com.daniel.ctsmessages.LogoutMessage;
 import com.daniel.exceptions.ConnectionError;
 import com.daniel.exceptions.ConvertionException;
+import com.daniel.properties.PropertiesReader;
 import com.daniel.server.connectmanager.ConnectionsManager;
 import com.daniel.stcmessages.STCMessage;
+import com.daniel.stcmessages.ServerKeepAlive;
 
 public class ChatServerThread extends Thread {
 
@@ -29,12 +33,22 @@ public class ChatServerThread extends Thread {
     private ArrayList<Object> clientMessageData;
 
     private String protocol;
+    private boolean suspicionOnZombie = false;
+
+    private ArrayList<STCMessage> archive;
 
     public ChatServerThread(ConnectionsManager connectionsManager, Socket client, Integer sessionID, String protocol) throws ConnectionError {
         setName("chatThread" + sessionID.toString());
         this.sessionID = sessionID;
         this.protocol = protocol;
         this.connectionsManager = connectionsManager;
+        PropertiesReader propertiesReader = new PropertiesReader();
+        propertiesReader.getAllProperties("/serverConfig.properties");
+        try {
+            client.setSoTimeout(propertiesReader.getTimeout());
+        } catch (SocketException e) {
+            e.printStackTrace();
+        }
         try {
             objectInputStream = new ObjectInputStream(client.getInputStream());
             objectOutputStream = new ObjectOutputStream(client.getOutputStream());
@@ -69,22 +83,39 @@ public class ChatServerThread extends Thread {
                 connectionsManager.chatMessageNotification((String) clientMessageData.get(0), sessionID);
             }
         });
+        reactions.put("KeepAlive", new Runnable() {
+            @Override
+            public void run() {
+                suspicionOnZombie = false;
+                int archiveLen = archive.size();
+                if (archiveLen > 0) {
+                    for (int i = 0; i < archiveLen; i++) {
+                        sendMessage(archive.remove(i));
+                    }
+                }
+            }
+        });
     }
 
     private CTSMessage readClientMessage() throws Exception {
         CTSMessage message = null;
         if (protocol.equals("Basic")) {
-            try {
-                message = (CTSMessage) objectInputStream.readObject();
-            } catch (SocketException e) {
-                e.printStackTrace();
-            } 
-            catch (ClassNotFoundException | IOException e) {
-                // e.printStackTrace();
-                throw e;
-            } catch (NullPointerException e) {
-                // e.printStackTrace();
-                throw e;
+            while (true) {
+                try {
+                    message = (CTSMessage) objectInputStream.readObject();
+                    break;
+                } catch (SocketTimeoutException e) {
+                    if (suspicionOnZombie == false) {
+                        suspicionOnZombie = true;
+                        sendMessage(new ServerKeepAlive());
+                    }
+                    else {
+                        return new LogoutMessage();
+                    }
+                }
+                catch (ClassNotFoundException | IOException | NullPointerException e) {
+                    throw e;
+                }
             }
         }
         if (protocol.equals("XML")) {
@@ -103,6 +134,7 @@ public class ChatServerThread extends Thread {
                 clientMessageData = message.getData();
                 reactions.get(message.getName()).run();
             } catch (Exception e) {
+                e.printStackTrace();
                 connectionsManager.disconnectUser(sessionID);
             }
         }
@@ -110,6 +142,10 @@ public class ChatServerThread extends Thread {
     }
 
     public void sendMessage(STCMessage message) {
+        if (suspicionOnZombie == true) {
+            archive.add(message);
+            return;
+        }
         if (protocol.equals("Basic")) {
             try {
                 objectOutputStream.writeObject(message);

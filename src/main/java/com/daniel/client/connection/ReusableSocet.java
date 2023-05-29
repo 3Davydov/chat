@@ -14,6 +14,7 @@ import com.daniel.XMLConverter.ClientToXML.ClientMessageConvFactory;
 import com.daniel.XMLConverter.ServerToXML.ServerMessageConvFactory;
 import com.daniel.client.Client;
 import com.daniel.ctsmessages.CTSMessage;
+import com.daniel.ctsmessages.ClientKeepAlive;
 import com.daniel.exceptions.ConvertionException;
 import com.daniel.exceptions.NoActiveSocetException;
 import com.daniel.exceptions.SocetStillOpenedException;
@@ -55,6 +56,17 @@ public class ReusableSocet extends Thread {
             @Override
             public void run() {
                 client.refreshChatView(serverMessageData);
+            }
+        });
+
+        reactions.put("KeepAlive", new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    sendMessage(new ClientKeepAlive());
+                } catch (IOException | NoActiveSocetException e) {
+                    e.printStackTrace();
+                }
             }
         });
         reactions.put("error", new Runnable() {
