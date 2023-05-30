@@ -90,19 +90,32 @@ public class ChatServerThread extends Thread {
         reactions.put("KeepAlive", new Runnable() {
             @Override
             public void run() {
-                Map<Long, Object> s = new TreeMap<>();
-                if (serverArchive.size() > 0) s.putAll(serverArchive);
-                if (clientArchive.size() > 0) s.putAll(clientArchive);
-                for (Map.Entry<Long, Object> entry : s.entrySet()) {
-                    Object value = entry.getValue();
-                    if (value instanceof STCMessage) sendMessage((STCMessage) value);
-                    else {
-                        CTSMessage copy = (CTSMessage) value;
-                        reactions.get(copy.getName()).run();
-                    }
-                }
+                // try {
+                // Map<Long, Object> s = new TreeMap<>();
+                // if (serverArchive.size() > 0) s.putAll(serverArchive);
+                // if (clientArchive.size() > 0) s.putAll(clientArchive);
+                // for (Map.Entry<Long, Object> entry : s.entrySet()) {
+                //     Object value = entry.getValue();
+                //     if (value instanceof STCMessage) sendMessage((STCMessage) value);
+                //     else {
+                //         CTSMessage copy = (CTSMessage) value;
+                //         clientMessageData = copy.getData();
+                //         reactions.get(copy.getName()).run();
+                //     }
+                // }
+                // serverArchive.clear();
+                // clientArchive.clear();
+                // } catch (Exception e) {
+                //     e.printStackTrace();
+                // }
+                sendMessage(new ServerKeepAlive());
             }
         });
+    }
+
+    private CTSMessage pingClient() {
+        return null;
+        // TODO realize
     }
 
     private CTSMessage readClientMessage() throws Exception {
@@ -111,24 +124,28 @@ public class ChatServerThread extends Thread {
             try {
                 message = (CTSMessage) objectInputStream.readObject();
             } catch (SocketTimeoutException e) {
+                // e.printStackTrace();
                 suspicionOnZombie = true;
-                sendMessage(new ServerKeepAlive());
-                while (true) {
-                    try {
-                        message = (CTSMessage) objectInputStream.readObject();
-                    } catch (SocketTimeoutException err) {
-                        return new LogoutMessage();
-                    } 
-                    catch (ClassNotFoundException | IOException err) {
-                        err.printStackTrace();
+                for (int i = 0; i < 4; i++) {
+                    while (true) {
+                        try {
+                            message = (CTSMessage) objectInputStream.readObject();
+                        } catch (SocketTimeoutException err) {
+                            if (i == 3) return new LogoutMessage();
+                            else break;
+                        } 
+                        catch (ClassNotFoundException | IOException err) {
+                            err.printStackTrace();
+                        }
+                        if (message.getName().equals("KeepAlive")) {
+                            suspicionOnZombie = false;
+                            break;
+                        }
+                        else {
+                            clientArchive.put(Long.valueOf(System.currentTimeMillis()), message);
+                        }
                     }
-                    if (message.getName().equals("KeepAlive")) {
-                        suspicionOnZombie = false;
-                        break;
-                    }
-                    else {
-                        clientArchive.put(Long.valueOf(System.currentTimeMillis()), message);
-                    }
+                    if (suspicionOnZombie == false) break;
                 }
                 reactions.get(message.getName()).run();
             } catch (ClassNotFoundException | IOException | NullPointerException e) {

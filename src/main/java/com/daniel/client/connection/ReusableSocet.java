@@ -3,11 +3,16 @@ package com.daniel.client.connection;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import com.daniel.XMLConverter.ConverterFactory;
 import com.daniel.XMLConverter.ClientToXML.ClientMessageConvFactory;
@@ -31,6 +36,9 @@ public class ReusableSocet extends Thread {
     private ArrayList<Object> serverMessageData;
 
     private String protocol;
+    private ScheduledExecutorService executorService;
+
+    private boolean suspicionOnZombie = false;
 
     public ReusableSocet(Client client, String protocol) {
         setName("Socket");
@@ -62,11 +70,11 @@ public class ReusableSocet extends Thread {
         reactions.put("KeepAlive", new Runnable() {
             @Override
             public void run() {
-                try {
-                    sendMessage(new ClientKeepAlive());
-                } catch (IOException | NoActiveSocetException e) {
-                    e.printStackTrace();
-                }
+                // try {
+                //     sendMessage(new ClientKeepAlive());
+                // } catch (IOException | NoActiveSocetException e) {
+                //     e.printStackTrace();
+                // }
             }
         });
         reactions.put("error", new Runnable() {
@@ -91,15 +99,32 @@ public class ReusableSocet extends Thread {
         if (socket!= null) {
             throw new SocetStillOpenedException("There is already a connection");
         }
-        socket = new Socket(host, port);
+        socket = new Socket();
+        socket.connect(new InetSocketAddress(host, port), 5000);
+        
+        socket.setSoTimeout(5000); // TODO add to properties
         objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
         objectInputStream = new ObjectInputStream(socket.getInputStream());
+        executorService = Executors.newSingleThreadScheduledExecutor();
+        executorService.scheduleAtFixedRate(() -> {
+            try {
+                sendMessage(new ClientKeepAlive());
+            } catch (IOException | NoActiveSocetException e) {
+                e.printStackTrace();
+            }
+        }, 0, 2500, TimeUnit.MILLISECONDS); // TODO add to properties
         notify();
     }
 
     public void closeConnection() throws IOException, NoActiveSocetException {
         if (socket == null) {
             throw new NoActiveSocetException("There is no active connection");
+        }
+        executorService.shutdown();
+        try {
+            executorService.awaitTermination(1, TimeUnit.SECONDS); // ќжидание завершени€ выполнени€ задач
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
         socket.close();
         objectOutputStream.close();
@@ -118,7 +143,16 @@ public class ReusableSocet extends Thread {
         if (socket == null) {
             throw new NoActiveSocetException("There is no active connection");
         }
-        if (protocol.equals("Basic")) objectOutputStream.writeObject(message);
+        try {
+            if (protocol.equals("Basic")) {
+                synchronized (objectOutputStream) {
+                    objectOutputStream.writeObject(message);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+            return;
+        }
         if (protocol.equals("XML")) {
             ConverterFactory converterFactory = new ClientMessageConvFactory();
             String StrMessage = null;
@@ -131,10 +165,37 @@ public class ReusableSocet extends Thread {
         }
     }
 
-    private STCMessage getMessage() throws ClassNotFoundException, IOException {
+    private STCMessage getMessage() throws ClassNotFoundException, IOException, NoActiveSocetException {
         STCMessage serverMessage = null;
         if (protocol.equals("Basic")) {
-            serverMessage = (STCMessage) objectInputStream.readObject();
+            try {
+                serverMessage = (STCMessage) objectInputStream.readObject();
+            } catch (SocketTimeoutException e) {
+                suspicionOnZombie = true;
+                for (int i = 0; i < 4; i++) {
+                    while (true) {
+                        try {
+                            sendMessage(new ClientKeepAlive());
+                            serverMessage = (STCMessage) objectInputStream.readObject();
+                        } catch (SocketTimeoutException err) {
+                            if (i == 3) closeConnection();
+                            else break;
+                        } 
+                        catch (ClassNotFoundException | IOException err) {
+                            err.printStackTrace();
+                        }
+                        if (serverMessage.getName().equals("KeepAlive")) {
+                            suspicionOnZombie = false;
+                            break;
+                        }
+                        else {
+                            // clientArchive.put(Long.valueOf(System.currentTimeMillis()), message);
+                        }
+                    }
+                    if (suspicionOnZombie == false) break;
+                }
+                reactions.get(serverMessage.getName()).run();
+            }
         }
         if (protocol.equals("XML")) {
             String xmlMessage = (String) objectInputStream.readObject();
@@ -153,6 +214,7 @@ public class ReusableSocet extends Thread {
         while (! this.isInterrupted()) {
             try {
                 STCMessage serverMessage = getMessage();
+                // if (serverMessage == null) continue; // TODO improve
                 serverMessageData = serverMessage.getData();
                 reactions.get(serverMessage.getName()).run();
             } catch (ClassNotFoundException | IOException e) {
@@ -163,6 +225,8 @@ public class ReusableSocet extends Thread {
                 } catch (InterruptedException err) {
                     this.interrupt();
                 }
+            } catch (NoActiveSocetException e) {
+                e.printStackTrace();
             }
         }
         System.out.println("Client socket is interrupted");
