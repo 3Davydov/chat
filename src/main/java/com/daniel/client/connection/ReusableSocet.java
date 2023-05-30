@@ -39,6 +39,7 @@ public class ReusableSocet extends Thread {
     private ScheduledExecutorService executorService;
 
     private boolean suspicionOnZombie = false;
+    private ArrayList<STCMessage> archive = new ArrayList<>();
 
     public ReusableSocet(Client client, String protocol) {
         setName("Socket");
@@ -69,7 +70,15 @@ public class ReusableSocet extends Thread {
 
         reactions.put("KeepAlive", new Runnable() {
             @Override
-            public void run() {}
+            public void run() {
+                if (archive.size() > 0) {
+                    for (int i = 0; i < archive.size(); i++) {
+                        STCMessage s = archive.remove(i);
+                        serverMessageData = s.getData();
+                        reactions.get(s.getName()).run();
+                    }
+                }
+            }
         });
         reactions.put("error", new Runnable() {
             @Override
@@ -121,8 +130,8 @@ public class ReusableSocet extends Thread {
             e.printStackTrace();
         }
         socket.close();
-        objectOutputStream.close();
-        objectInputStream.close();
+        if (objectOutputStream != null) objectOutputStream.close();
+        if (objectInputStream != null) objectInputStream.close();
         objectInputStream = null;
         objectOutputStream = null;
         socket = null;
@@ -166,7 +175,7 @@ public class ReusableSocet extends Thread {
                 serverMessage = (STCMessage) objectInputStream.readObject();
             } catch (SocketTimeoutException e) {
                 suspicionOnZombie = true;
-                client.processError("lost connection");
+                client.processError("Connection problem");
                 for (int i = 0; i < 4; i++) {
                     while (true) {
                         try {
@@ -174,8 +183,8 @@ public class ReusableSocet extends Thread {
                             serverMessage = (STCMessage) objectInputStream.readObject();
                         } catch (SocketTimeoutException err) {
                             if (i == 3) {
-                                System.out.println("close");
-                                closeConnection();
+                                client.processError("Connection closed");
+                                client.disconnect();
                             }
                             else break;
                         } 
@@ -187,7 +196,7 @@ public class ReusableSocet extends Thread {
                             break;
                         }
                         else {
-                            // clientArchive.put(Long.valueOf(System.currentTimeMillis()), message);
+                            archive.add(serverMessage);
                         }
                     }
                     if (suspicionOnZombie == false) {
@@ -195,7 +204,8 @@ public class ReusableSocet extends Thread {
                         break;
                     }
                 }
-
+                serverMessageData = serverMessage.getData();
+                reactions.get(serverMessage.getName()).run();
             }
         }
         if (protocol.equals("XML")) {

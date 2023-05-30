@@ -72,6 +72,14 @@ public class ConnectionsManager extends Thread implements CTSPassingInterface, S
         connections.remove(sessionID);
     }
 
+    public synchronized void disconnectUser(Integer sessionID, String reason) {
+        try {
+            server.deleteUser(sessionID, reason);
+        } catch (IllegalRequestException e) {}
+        connections.get(sessionID).interrupt();
+        connections.remove(sessionID);
+    }
+
     @Override
     public synchronized void requestForParticipantsList(Integer sessionID) {
         try {

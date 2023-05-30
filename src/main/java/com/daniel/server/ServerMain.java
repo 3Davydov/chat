@@ -89,6 +89,19 @@ public class ServerMain {
         }
     }
 
+    public void deleteUser(Integer sessionID, String reason) throws IllegalRequestException {
+        try {
+            logger.info("New user whith name " + participantsList.getNameByID(sessionID) + " and ID " + String.valueOf(sessionID) + " had disconnected from server by timeout");
+            currentChatPointer++;
+            chatHistory.addSystemMessage("User whith name " + participantsList.getNameByID(sessionID) + " and ID " + String.valueOf(sessionID) + " had disconnected from server by timeout");
+            participantsList.removeParticipant(sessionID);
+            offsets.remove(sessionID);
+            refreshChat();
+        } catch (DuplicateNameException e) {
+            throw new IllegalRequestException(Integer.toString(sessionID));
+        }
+    }
+
     public void sendParticipantsTable(Integer sessionID) throws IllegalRequestException {
         try {
             logger.info("Send participants list to " + participantsList.getNameByID(sessionID));
