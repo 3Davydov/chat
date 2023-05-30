@@ -73,7 +73,7 @@ public class ReusableSocet extends Thread {
             @Override
             public void run() {
                 String error = (String) serverMessageData.get(0);
-                if (error.equals("user whith this name already exists") || error.equals("userwhiththisnamealreadyexists")) {
+                if (error.equals("user whith this name already exists")) {
                     socket = null;
                     client.setRegistrationStatus(false);
                     try {

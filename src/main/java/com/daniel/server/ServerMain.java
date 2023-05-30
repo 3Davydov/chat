@@ -101,7 +101,7 @@ public class ServerMain {
 
     public void addMessageToChatHistory(String message, Integer sessionID) {
         message = message.replace("\n", "");
-        message = message.replace(" ", "");
+        // message = message.replace(" ", "");
         try {
             logger.info("User " + participantsList.getNameByID(sessionID) + " sent message");
             currentChatPointer++;

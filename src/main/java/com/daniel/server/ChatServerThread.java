@@ -9,6 +9,7 @@ import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.TreeMap;
 
 import com.daniel.XMLConverter.ConverterFactory;
 import com.daniel.XMLConverter.ClientToXML.ClientMessageConvFactory;
@@ -35,13 +36,16 @@ public class ChatServerThread extends Thread {
     private String protocol;
     private boolean suspicionOnZombie = false;
 
-    private ArrayList<STCMessage> archive;
+    private HashMap<Long, STCMessage> serverArchive;
+    private HashMap<Long, CTSMessage> clientArchive;
 
     public ChatServerThread(ConnectionsManager connectionsManager, Socket client, Integer sessionID, String protocol) throws ConnectionError {
         setName("chatThread" + sessionID.toString());
         this.sessionID = sessionID;
         this.protocol = protocol;
         this.connectionsManager = connectionsManager;
+        serverArchive = new HashMap<>();
+        clientArchive = new HashMap<>();
         PropertiesReader propertiesReader = new PropertiesReader();
         propertiesReader.getAllProperties("/serverConfig.properties");
         try {
@@ -86,11 +90,15 @@ public class ChatServerThread extends Thread {
         reactions.put("KeepAlive", new Runnable() {
             @Override
             public void run() {
-                suspicionOnZombie = false;
-                int archiveLen = archive.size();
-                if (archiveLen > 0) {
-                    for (int i = 0; i < archiveLen; i++) {
-                        sendMessage(archive.remove(i));
+                Map<Long, Object> s = new TreeMap<>();
+                if (serverArchive.size() > 0) s.putAll(serverArchive);
+                if (clientArchive.size() > 0) s.putAll(clientArchive);
+                for (Map.Entry<Long, Object> entry : s.entrySet()) {
+                    Object value = entry.getValue();
+                    if (value instanceof STCMessage) sendMessage((STCMessage) value);
+                    else {
+                        CTSMessage copy = (CTSMessage) value;
+                        reactions.get(copy.getName()).run();
                     }
                 }
             }
@@ -100,22 +108,31 @@ public class ChatServerThread extends Thread {
     private CTSMessage readClientMessage() throws Exception {
         CTSMessage message = null;
         if (protocol.equals("Basic")) {
-            while (true) {
-                try {
-                    message = (CTSMessage) objectInputStream.readObject();
-                    break;
-                } catch (SocketTimeoutException e) {
-                    if (suspicionOnZombie == false) {
-                        suspicionOnZombie = true;
-                        sendMessage(new ServerKeepAlive());
+            try {
+                message = (CTSMessage) objectInputStream.readObject();
+            } catch (SocketTimeoutException e) {
+                suspicionOnZombie = true;
+                sendMessage(new ServerKeepAlive());
+                while (true) {
+                    try {
+                        message = (CTSMessage) objectInputStream.readObject();
+                    } catch (SocketTimeoutException err) {
+                        return new LogoutMessage();
+                    } 
+                    catch (ClassNotFoundException | IOException err) {
+                        err.printStackTrace();
+                    }
+                    if (message.getName().equals("KeepAlive")) {
+                        suspicionOnZombie = false;
+                        break;
                     }
                     else {
-                        return new LogoutMessage();
+                        clientArchive.put(Long.valueOf(System.currentTimeMillis()), message);
                     }
                 }
-                catch (ClassNotFoundException | IOException | NullPointerException e) {
-                    throw e;
-                }
+                reactions.get(message.getName()).run();
+            } catch (ClassNotFoundException | IOException | NullPointerException e) {
+                throw e;
             }
         }
         if (protocol.equals("XML")) {
@@ -131,10 +148,10 @@ public class ChatServerThread extends Thread {
         while (! this.isInterrupted()) {
             try {
                 CTSMessage message = readClientMessage();
+                if (message == null) continue; // TODO maybe delete
                 clientMessageData = message.getData();
                 reactions.get(message.getName()).run();
             } catch (Exception e) {
-                e.printStackTrace();
                 connectionsManager.disconnectUser(sessionID);
             }
         }
@@ -142,8 +159,8 @@ public class ChatServerThread extends Thread {
     }
 
     public void sendMessage(STCMessage message) {
-        if (suspicionOnZombie == true) {
-            archive.add(message);
+        if (suspicionOnZombie == true && ! message.getName().equals("KeepAlive")) {
+            serverArchive.put(Long.valueOf(System.currentTimeMillis()), message);
             return;
         }
         if (protocol.equals("Basic")) {
