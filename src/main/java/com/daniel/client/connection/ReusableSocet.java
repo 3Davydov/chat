@@ -69,13 +69,7 @@ public class ReusableSocet extends Thread {
 
         reactions.put("KeepAlive", new Runnable() {
             @Override
-            public void run() {
-                // try {
-                //     sendMessage(new ClientKeepAlive());
-                // } catch (IOException | NoActiveSocetException e) {
-                //     e.printStackTrace();
-                // }
-            }
+            public void run() {}
         });
         reactions.put("error", new Runnable() {
             @Override
@@ -172,13 +166,17 @@ public class ReusableSocet extends Thread {
                 serverMessage = (STCMessage) objectInputStream.readObject();
             } catch (SocketTimeoutException e) {
                 suspicionOnZombie = true;
+                client.processError("lost connection");
                 for (int i = 0; i < 4; i++) {
                     while (true) {
                         try {
                             sendMessage(new ClientKeepAlive());
                             serverMessage = (STCMessage) objectInputStream.readObject();
                         } catch (SocketTimeoutException err) {
-                            if (i == 3) closeConnection();
+                            if (i == 3) {
+                                System.out.println("close");
+                                closeConnection();
+                            }
                             else break;
                         } 
                         catch (ClassNotFoundException | IOException err) {
@@ -192,9 +190,12 @@ public class ReusableSocet extends Thread {
                             // clientArchive.put(Long.valueOf(System.currentTimeMillis()), message);
                         }
                     }
-                    if (suspicionOnZombie == false) break;
+                    if (suspicionOnZombie == false) {
+                        client.processError("reconnected");
+                        break;
+                    }
                 }
-                reactions.get(serverMessage.getName()).run();
+
             }
         }
         if (protocol.equals("XML")) {

@@ -131,7 +131,10 @@ public class ChatServerThread extends Thread {
                         try {
                             message = (CTSMessage) objectInputStream.readObject();
                         } catch (SocketTimeoutException err) {
-                            if (i == 3) return new LogoutMessage();
+                            if (i == 3) {
+                                System.out.println("logout");
+                                return new LogoutMessage();
+                            }
                             else break;
                         } 
                         catch (ClassNotFoundException | IOException err) {

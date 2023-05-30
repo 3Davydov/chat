@@ -5,6 +5,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.ScrollPaneConstants;
+import javax.swing.Timer;
 
 import com.daniel.client.Client;
 import com.daniel.client.view.uicomponents.ChatMenu;
@@ -167,7 +168,22 @@ public class ClientGUI {
         chatView.repaintChat(messages);
     }
 
+    private JOptionPane sideMessage;
+
     public void displayError(String err) {
-        JOptionPane.showMessageDialog(mainFrame, err);
+        if (err.equals("lost connection")) {
+            sideMessage = new JOptionPane("Trying to reconnect", JOptionPane.INFORMATION_MESSAGE, JOptionPane.DEFAULT_OPTION);
+            sideMessage.setVisible(true);
+            mainFrame.add(sideMessage);
+            Timer timer = new Timer(3000, e -> {
+                sideMessage.setVisible(false);
+                mainFrame.revalidate();
+                mainFrame.repaint();
+            });
+            timer.setRepeats(false); // Однократное срабатывание таймера
+            timer.start();
+        }
+        if (err.equals("reconnected")) sideMessage.setVisible(false);
+        else JOptionPane.showMessageDialog(mainFrame, err);
     }
 }
