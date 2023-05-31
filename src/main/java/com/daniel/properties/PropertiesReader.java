@@ -47,4 +47,10 @@ public class PropertiesReader {
     public Integer getKeepAlive() {
         return Integer.valueOf(prop.getProperty("keepAlive"));
     }
+
+    public Integer getPingCount() {
+        return Integer.valueOf(prop.getProperty("pingCount"));
+    }
+
+    
 }

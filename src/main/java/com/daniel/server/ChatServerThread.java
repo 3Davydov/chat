@@ -36,6 +36,8 @@ public class ChatServerThread extends Thread {
     private String protocol;
     private boolean suspicionOnZombie = false;
 
+    private int pingCount = 0;
+
     private HashMap<Long, STCMessage> serverArchive;
     private HashMap<Long, CTSMessage> clientArchive;
 
@@ -48,6 +50,7 @@ public class ChatServerThread extends Thread {
         clientArchive = new HashMap<>();
         PropertiesReader propertiesReader = new PropertiesReader();
         propertiesReader.getAllProperties("/serverConfig.properties");
+        this.pingCount = propertiesReader.getPingCount();
         try {
             client.setSoTimeout(propertiesReader.getTimeout());
         } catch (SocketException e) {
@@ -123,12 +126,12 @@ public class ChatServerThread extends Thread {
                 message = (CTSMessage) objectInputStream.readObject();
             } catch (SocketTimeoutException e) {
                 suspicionOnZombie = true;
-                for (int i = 0; i < 4; i++) {
+                for (int i = 0; i < pingCount; i++) {
                     while (true) {
                         try {
                             message = (CTSMessage) objectInputStream.readObject();
                         } catch (SocketTimeoutException err) {
-                            if (i == 3) return new LogoutMessage("timeout");
+                            if (i == pingCount - 1) return new LogoutMessage("timeout");
                             else break;
                         } 
                         catch (ClassNotFoundException | IOException err) {
@@ -158,14 +161,14 @@ public class ChatServerThread extends Thread {
                 message = converterFactory.convertFromSerializableXMLtoCM(XMLMessage);
             } catch (SocketTimeoutException e) {
                 suspicionOnZombie = true;
-                for (int i = 0; i < 4; i++) {
+                for (int i = 0; i < pingCount; i++) {
                     while (true) {
                         try {
                             XMLMessage = (String) objectInputStream.readObject();
                             ConverterFactory converterFactory = new ClientMessageConvFactory();
                             message = converterFactory.convertFromSerializableXMLtoCM(XMLMessage);
                         } catch (SocketTimeoutException err) {
-                            if (i == 3) return new LogoutMessage("timeout");
+                            if (i == pingCount - 1) return new LogoutMessage("timeout");
                             else break;
                         } 
                         catch (ClassNotFoundException | IOException err) {}
@@ -191,7 +194,7 @@ public class ChatServerThread extends Thread {
         while (! this.isInterrupted()) {
             try {
                 CTSMessage message = readClientMessage();
-                if (message == null) continue; // TODO maybe delete
+                if (message == null) continue;
                 clientMessageData = message.getData();
                 reactions.get(message.getName()).run();
             } catch (Exception e) {

@@ -23,6 +23,7 @@ import com.daniel.ctsmessages.ClientKeepAlive;
 import com.daniel.exceptions.ConvertionException;
 import com.daniel.exceptions.NoActiveSocetException;
 import com.daniel.exceptions.SocetStillOpenedException;
+import com.daniel.properties.PropertiesReader;
 import com.daniel.stcmessages.STCMessage;
 
 public class ReusableSocet extends Thread {
@@ -41,10 +42,17 @@ public class ReusableSocet extends Thread {
     private boolean suspicionOnZombie = false;
     private ArrayList<STCMessage> archive = new ArrayList<>();
 
+    private int pingCount = 0;
+    private int timeout = 0;
+
     public ReusableSocet(Client client, String protocol) {
         setName("Socket");
         this.protocol = protocol;
         this.client = client;
+        PropertiesReader propertiesReader = new PropertiesReader();
+        propertiesReader.getAllProperties("/clientConfig.properties");
+        this.pingCount = propertiesReader.getPingCount();
+        this.timeout = propertiesReader.getTimeout();
         initReactions();
     }
 
@@ -105,7 +113,7 @@ public class ReusableSocet extends Thread {
         socket = new Socket();
         socket.connect(new InetSocketAddress(host, port), 5000);
         
-        socket.setSoTimeout(5000); // TODO add to properties
+        socket.setSoTimeout(timeout);
         objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
         objectInputStream = new ObjectInputStream(socket.getInputStream());
         executorService = Executors.newSingleThreadScheduledExecutor();
@@ -115,7 +123,7 @@ public class ReusableSocet extends Thread {
             } catch (IOException | NoActiveSocetException e) {
                 e.printStackTrace();
             }
-        }, 0, 2500, TimeUnit.MILLISECONDS); // TODO add to properties
+        }, 0, timeout / 2, TimeUnit.MILLISECONDS);
         notify();
     }
 
@@ -126,7 +134,7 @@ public class ReusableSocet extends Thread {
         if (executorService != null) {
             executorService.shutdown();
             try {
-                executorService.awaitTermination(1, TimeUnit.SECONDS); // ќжидание завершени€ выполнени€ задач
+                executorService.awaitTermination(1, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -179,13 +187,13 @@ public class ReusableSocet extends Thread {
             } catch (SocketTimeoutException e) {
                 suspicionOnZombie = true;
                 client.processError("Connection problem");
-                for (int i = 0; i < 4; i++) {
+                for (int i = 0; i < pingCount; i++) {
                     while (true) {
                         try {
                             sendMessage(new ClientKeepAlive());
                             serverMessage = (STCMessage) objectInputStream.readObject();
                         } catch (SocketTimeoutException err) {
-                            if (i == 3) {
+                            if (i == pingCount - 1) {
                                 client.processError("Connection closed");
                                 client.disconnect();
                             }
@@ -224,7 +232,7 @@ public class ReusableSocet extends Thread {
             } catch (SocketTimeoutException e) {
                 suspicionOnZombie = true;
                 client.processError("Connection problem");
-                for (int i = 0; i < 4; i++) {
+                for (int i = 0; i < pingCount; i++) {
                     while (true) {
                         try {
                             sendMessage(new ClientKeepAlive());
@@ -236,7 +244,7 @@ public class ReusableSocet extends Thread {
                                 client.processError(err.getMessage());
                             }
                         } catch (SocketTimeoutException err) {
-                            if (i == 3) {
+                            if (i == pingCount - 1) {
                                 client.processError("Connection closed");
                                 client.disconnect();
                             }
@@ -270,7 +278,6 @@ public class ReusableSocet extends Thread {
         while (! this.isInterrupted()) {
             try {
                 STCMessage serverMessage = getMessage();
-                // if (serverMessage == null) continue; // TODO improve
                 serverMessageData = serverMessage.getData();
                 reactions.get(serverMessage.getName()).run();
             } catch (ClassNotFoundException | IOException e) {

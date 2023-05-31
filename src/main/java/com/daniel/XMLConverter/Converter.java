@@ -32,7 +32,11 @@ public abstract class Converter {
             transformer.setOutputProperty(OutputKeys.INDENT, "yes");
             
             StringWriter writer = new StringWriter();
-            transformer.transform(new DOMSource(document), new StreamResult(writer));
+            try {
+                transformer.transform(new DOMSource(document), new StreamResult(writer));
+            } catch (TransformerException e) {
+                e.printStackTrace();
+            }
             
             return writer.toString();
         } catch (TransformerException e) {
