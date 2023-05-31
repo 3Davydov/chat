@@ -14,6 +14,7 @@ public class ClientMessageConvFactory extends ConverterFactory {
         if (messageName.equals("logout")) return new LogoutMessageConverter();
         if (messageName.equals("text")) return new ChatMessageConverter();
         if (messageName.equals("list")) return new ListMessageConverter();
+        if (messageName.equals("ClientKeepAlive")) return new ClientKeepaliveMessageConverter();
         return null;
     }
 
@@ -24,6 +25,7 @@ public class ClientMessageConvFactory extends ConverterFactory {
         if (name.equals("logout")) return new LogoutMessageConverter();
         if (name.equals("text")) return new ChatMessageConverter();
         if (name.equals("list")) return new ListMessageConverter();
+        if (name.equals("ClientKeepAlive")) return new ClientKeepaliveMessageConverter();
         return null;
     }
 }

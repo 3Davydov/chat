@@ -14,6 +14,7 @@ public class ServerMessageConvFactory extends ConverterFactory {
         if (messageName.equals("chatHistory")) return new ChatHistoryConverter();
         if (messageName.equals("error")) return new ErrorMessageConverter();
         if (messageName.equals("filledList")) return new ParticipantsListConverter();
+        if (messageName.equals("ServerKeepAlive")) return new ServerKeepaliveMessageConverter();
         return null;
     }
 
@@ -24,6 +25,7 @@ public class ServerMessageConvFactory extends ConverterFactory {
         if (name.equals("chatHistory")) return new ChatHistoryConverter();
         if (name.equals("error")) return new ErrorMessageConverter();
         if (name.equals("filledList")) return new ParticipantsListConverter();
+        if (name.equals("ServerKeepAlive")) return new ServerKeepaliveMessageConverter();
         return null;
     }
 }

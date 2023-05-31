@@ -5,7 +5,7 @@ import java.util.ArrayList;
 
 public class ClientKeepAlive implements CTSMessage, Serializable {
 
-    private final String messageName = "KeepAlive";
+    private final String messageName = "ClientKeepAlive";
 
     public ClientKeepAlive() {}
 

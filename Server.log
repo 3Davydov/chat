@@ -1,0 +1,14 @@
+мая 31, 2023 7:32:28 AM com.daniel.server.ServerMain <init>
+INFO: Server have been started
+мая 31, 2023 7:32:44 AM com.daniel.server.ServerMain registrateUser
+INFO: New user whith name dan and ID 0 had connected to server
+мая 31, 2023 7:32:47 AM com.daniel.server.ServerMain addMessageToChatHistory
+INFO: User dan sent message
+мая 31, 2023 7:32:48 AM com.daniel.server.ServerMain addMessageToChatHistory
+INFO: User dan sent message
+мая 31, 2023 7:32:50 AM com.daniel.server.ServerMain addMessageToChatHistory
+INFO: User dan sent message
+мая 31, 2023 7:33:03 AM com.daniel.server.ServerMain addMessageToChatHistory
+INFO: User dan sent message
+мая 31, 2023 7:33:04 AM com.daniel.server.ServerMain sendParticipantsTable
+INFO: Send participants list to dan

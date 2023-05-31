@@ -5,7 +5,7 @@ import java.util.ArrayList;
 
 public class ServerKeepAlive implements STCMessage, Serializable {
 
-    private final String messageName = "KeepAlive";
+    private final String messageName = "ServerKeepAlive";
 
     public ServerKeepAlive() {}
 

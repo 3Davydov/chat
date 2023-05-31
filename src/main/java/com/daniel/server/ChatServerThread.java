@@ -72,7 +72,7 @@ public class ChatServerThread extends Thread {
         reactions.put("logout", new Runnable() {
             @Override
             public void run() {
-                if (clientMessageData != null) connectionsManager.disconnectUser(sessionID, "timeout");
+                if (clientMessageData != null && clientMessageData.size() > 0) connectionsManager.disconnectUser(sessionID, "timeout");
                 connectionsManager.disconnectUser(sessionID);
             }
         });
@@ -88,7 +88,7 @@ public class ChatServerThread extends Thread {
                 connectionsManager.chatMessageNotification((String) clientMessageData.get(0), sessionID);
             }
         });
-        reactions.put("KeepAlive", new Runnable() {
+        reactions.put("ClientKeepAlive", new Runnable() {
             @Override
             public void run() {
                 try {
@@ -128,13 +128,13 @@ public class ChatServerThread extends Thread {
                         try {
                             message = (CTSMessage) objectInputStream.readObject();
                         } catch (SocketTimeoutException err) {
-                            if (i == 3) return new LogoutMessage();
+                            if (i == 3) return new LogoutMessage("timeout");
                             else break;
                         } 
                         catch (ClassNotFoundException | IOException err) {
                             err.printStackTrace();
                         }
-                        if (message.getName().equals("KeepAlive")) {
+                        if (message.getName().equals("ClientKeepAlive")) {
                             suspicionOnZombie = false;
                             break;
                         }
@@ -150,10 +150,38 @@ public class ChatServerThread extends Thread {
                 throw e;
             }
         }
+        String XMLMessage = null;
         if (protocol.equals("XML")) {
-            String XMLMessage = (String) objectInputStream.readObject();
-            ConverterFactory converterFactory = new ClientMessageConvFactory();
-            message = converterFactory.convertFromSerializableXMLtoCM(XMLMessage);
+            try {
+                XMLMessage = (String) objectInputStream.readObject();
+                ConverterFactory converterFactory = new ClientMessageConvFactory();
+                message = converterFactory.convertFromSerializableXMLtoCM(XMLMessage);
+            } catch (SocketTimeoutException e) {
+                suspicionOnZombie = true;
+                for (int i = 0; i < 4; i++) {
+                    while (true) {
+                        try {
+                            XMLMessage = (String) objectInputStream.readObject();
+                            ConverterFactory converterFactory = new ClientMessageConvFactory();
+                            message = converterFactory.convertFromSerializableXMLtoCM(XMLMessage);
+                        } catch (SocketTimeoutException err) {
+                            if (i == 3) return new LogoutMessage("timeout");
+                            else break;
+                        } 
+                        catch (ClassNotFoundException | IOException err) {}
+                        if (message.getName().equals("ClientKeepAlive")) {
+                            suspicionOnZombie = false;
+                            break;
+                        }
+                        else {
+                            clientArchive.put(Long.valueOf(System.currentTimeMillis()), message);
+                        }
+                    }
+                    if (suspicionOnZombie == false) break;
+                }
+                clientMessageData = message.getData();
+                reactions.get(message.getName()).run();
+            }
         }
         return message;
     }
@@ -174,7 +202,7 @@ public class ChatServerThread extends Thread {
     }
 
     public void sendMessage(STCMessage message) {
-        if (suspicionOnZombie == true && ! message.getName().equals("KeepAlive")) {
+        if (suspicionOnZombie == true && ! message.getName().equals("ClientKeepAlive")) {
             serverArchive.put(Long.valueOf(System.currentTimeMillis()), message);
             return;
         }

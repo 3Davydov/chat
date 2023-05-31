@@ -36,7 +36,7 @@ public class ReusableSocet extends Thread {
     private ArrayList<Object> serverMessageData;
 
     private String protocol;
-    private ScheduledExecutorService executorService;
+    private ScheduledExecutorService executorService = null;
 
     private boolean suspicionOnZombie = false;
     private ArrayList<STCMessage> archive = new ArrayList<>();
@@ -68,7 +68,7 @@ public class ReusableSocet extends Thread {
             }
         });
 
-        reactions.put("KeepAlive", new Runnable() {
+        reactions.put("ServerKeepAlive", new Runnable() {
             @Override
             public void run() {
                 if (archive.size() > 0) {
@@ -123,11 +123,13 @@ public class ReusableSocet extends Thread {
         if (socket == null) {
             throw new NoActiveSocetException("There is no active connection");
         }
-        executorService.shutdown();
-        try {
-            executorService.awaitTermination(1, TimeUnit.SECONDS); // ќжидание завершени€ выполнени€ задач
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        if (executorService != null) {
+            executorService.shutdown();
+            try {
+                executorService.awaitTermination(1, TimeUnit.SECONDS); // ќжидание завершени€ выполнени€ задач
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         }
         socket.close();
         if (objectOutputStream != null) objectOutputStream.close();
@@ -162,6 +164,7 @@ public class ReusableSocet extends Thread {
             try {
                 StrMessage = converterFactory.convertToSerializableXML(message.getName(), message.getData());
             } catch (ConvertionException e) {
+                e.printStackTrace();
                 client.processError(e.getMessage());
             }
             objectOutputStream.writeObject(StrMessage);
@@ -191,7 +194,7 @@ public class ReusableSocet extends Thread {
                         catch (ClassNotFoundException | IOException err) {
                             err.printStackTrace();
                         }
-                        if (serverMessage.getName().equals("KeepAlive")) {
+                        if (serverMessage.getName().equals("ServerKeepAlive")) {
                             suspicionOnZombie = false;
                             break;
                         }
@@ -208,13 +211,55 @@ public class ReusableSocet extends Thread {
                 reactions.get(serverMessage.getName()).run();
             }
         }
+        String xmlMessage = null;
         if (protocol.equals("XML")) {
-            String xmlMessage = (String) objectInputStream.readObject();
-            ConverterFactory converterFactory = new ServerMessageConvFactory();
             try {
-                serverMessage = converterFactory.convertFromSerializableXMLtoSM(xmlMessage);
-            } catch (ConvertionException e) {
-                client.processError(e.getMessage());
+                xmlMessage = (String) objectInputStream.readObject();
+                ConverterFactory converterFactory = new ServerMessageConvFactory();
+                try {
+                    serverMessage = converterFactory.convertFromSerializableXMLtoSM(xmlMessage);
+                } catch (ConvertionException err) {
+                    client.processError(err.getMessage());
+                }
+            } catch (SocketTimeoutException e) {
+                suspicionOnZombie = true;
+                client.processError("Connection problem");
+                for (int i = 0; i < 4; i++) {
+                    while (true) {
+                        try {
+                            sendMessage(new ClientKeepAlive());
+                            xmlMessage = (String) objectInputStream.readObject();
+                            ConverterFactory converterFactory = new ServerMessageConvFactory();
+                            try {
+                                serverMessage = converterFactory.convertFromSerializableXMLtoSM(xmlMessage);
+                            } catch (ConvertionException err) {
+                                client.processError(err.getMessage());
+                            }
+                        } catch (SocketTimeoutException err) {
+                            if (i == 3) {
+                                client.processError("Connection closed");
+                                client.disconnect();
+                            }
+                            else break;
+                        } 
+                        catch (ClassNotFoundException | IOException err) {
+                            err.printStackTrace();
+                        }
+                        if (serverMessage.getName().equals("ServerKeepAlive")) {
+                            suspicionOnZombie = false;
+                            break;
+                        }
+                        else {
+                            archive.add(serverMessage);
+                        }
+                    }
+                    if (suspicionOnZombie == false) {
+                        client.processError("reconnected");
+                        break;
+                    }
+                }
+                serverMessageData = serverMessage.getData();
+                reactions.get(serverMessage.getName()).run();
             }
         }
         return serverMessage;

@@ -21,6 +21,6 @@ public class LogoutMessage implements Serializable, CTSMessage {
 
     @Override
     public ArrayList<Object> getData() {
-        return null;
+        return data;
     }
 }
